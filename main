@@ -77,7 +77,7 @@ NumberGenerator generate_sequence() {
 }
 
 int main() {
-    std::cout << "--- Start coroutine ---" << std::endl;
+    std::cout << "--- Start of the demo program ---" << std::endl;
     std::cout << "Sequence generation [1, 256]:" << std::endl;
 
     auto gen = generate_sequence();
