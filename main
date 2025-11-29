@@ -1,0 +1,93 @@
+#include <iostream>
+#include <coroutine>
+#include <random>
+#include <cmath>
+#include <ctime>
+
+struct SuspendController {
+    bool await_ready() const noexcept {
+        return false;
+    }
+
+    void await_suspend(std::coroutine_handle<>) const noexcept {}
+
+    void await_resume() const noexcept {}
+};
+
+struct NumberGenerator {
+    struct promise_type {
+        int current_value;
+
+        NumberGenerator get_return_object() {
+            return NumberGenerator{ std::coroutine_handle<promise_type>::from_promise(*this) };
+        }
+
+        std::suspend_always initial_suspend() { return {}; }
+        std::suspend_always final_suspend() noexcept { return {}; }
+
+        SuspendController yield_value(int value) {
+            current_value = value;
+            return SuspendController{};
+        }
+
+        void return_void() {}
+        void unhandled_exception() { std::exit(1); }
+    };
+
+    std::coroutine_handle<promise_type> handle;
+
+    NumberGenerator(std::coroutine_handle<promise_type> h) : handle(h) {}
+    ~NumberGenerator() {
+        if (handle) handle.destroy();
+    }
+
+    bool resume() {
+        if (!handle || handle.done()) return false;
+        handle.resume();
+        return !handle.done();
+    }
+
+    int value() const {
+        return handle.promise().current_value;
+    }
+};
+
+NumberGenerator generate_sequence() {
+    std::mt19937 rng(static_cast<unsigned int>(std::time(nullptr)));
+    std::uniform_int_distribution<int> dist(1, 256);
+
+    int prev = dist(rng);
+
+    while (true) {
+        int curr = dist(rng);
+        int diff = std::abs(curr - prev);
+
+        if (diff < 16) {
+            co_yield curr;
+
+            std::cout << "\n[Coroutine] STOP! Current number " << curr
+            << " differs from the previous one " << prev
+            << " by " << diff << " (which is less than 16)." << std::endl;
+            co_return;
+        }
+
+        prev = curr;
+        co_yield curr;
+    }
+}
+
+int main() {
+    std::cout << "--- Start coroutine ---" << std::endl;
+    std::cout << "Sequence generation [1, 256]:" << std::endl;
+
+    auto gen = generate_sequence();
+    int step = 1;
+
+    while (gen.resume()) {
+        std::cout << " Step " << step << ": Number obtained " << gen.value() << std::endl;
+        step++;
+    }
+
+    std::cout << "--- Coroutine as finished working. End of program ---" << std::endl;
+    return 0;
+}
